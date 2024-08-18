@@ -52,9 +52,12 @@ func Run(serverAddress string) {
 }
 
 func handleConn(serverAddress string, src oauth2.TokenSource) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute) // 5분 타임아웃 설정
+	defer cancel()
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
 	var serverConn *minecraft.Conn
 	var err error
 	go func() {
@@ -67,33 +70,30 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("Connecting to %s... (may take up to 5 minutes)\n", serverAddress)
+	fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
+
+	// ProtocolVersion 및 Timeout 필드를 제거
 	serverConn, err = minecraft.Dialer{
-		TokenSource:     src,
-		ProtocolVersion: protocol.CurrentVersion, // 최신 프로토콜 버전을 사용합니다.
-		Timeout:         5 * time.Minute,         // 타임아웃 설정
+		TokenSource: src,
 	}.DialContext(ctx, "raknet", serverAddress)
 	if err != nil {
-		fmt.Printf("Failed to connect: %v\n", err)
-		return
+		panic(err)
 	}
 
 	fmt.Println("Getting resource pack information...")
 	if err := serverConn.DoSpawnContext(ctx); err != nil {
-		fmt.Printf("Failed to get resource pack info: %v\n", err)
-		return
+		panic(err)
 	}
 
 	for i, rp := range serverConn.ResourcePacks() {
 		if err := stealPack(i, serverAddress, rp); err != nil {
-			fmt.Printf("Failed to steal resource pack: %v\n", err)
-			return
+			panic(err)
 		}
 	}
 
 	_ = serverConn.Close()
-	fmt.Println("All resource packs have been successfully stolen.")
 }
+
 
 func stealPack(i int, serverAddress string, rp *resource.Pack) error {
 	packBytes, err := downloadPack(rp)
