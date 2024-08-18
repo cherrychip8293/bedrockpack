@@ -58,11 +58,11 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     var serverConn *minecraft.Conn
     var err error
+
     go func() {
         <-sigs
         if serverConn != nil {
             _ = serverConn.Close()
-            serverConn = nil
         }
         cancel()
         os.Exit(0)
@@ -70,7 +70,6 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
 
-    // 서버와의 연결을 시도합니다. 프로토콜 버전은 자동으로 처리됩니다.
     serverConn, err = minecraft.Dialer{
         TokenSource: src,
     }.DialContext(ctx, "raknet", serverAddress)
@@ -89,7 +88,11 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
         }
     }
 
-    _ = serverConn.Close()
+    // Ensure connection is closed properly
+    err = serverConn.Close()
+    if err != nil {
+        fmt.Printf("Warning: error closing connection: %v\n", err)
+    }
 }
 
 func stealPack(i int, serverAddress string, rp *resource.Pack) error {
