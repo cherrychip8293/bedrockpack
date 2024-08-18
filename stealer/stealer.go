@@ -18,15 +18,11 @@ import (
     "time"
 )
 
-const (
-    protocolVersion = 950 // 프로토콜 버전 1.21.21에 맞는 버전
-    maxRetries      = 3   // 최대 재시도 횟수
-)
-
 func Run(serverAddress string) {
     if len(strings.Split(serverAddress, ":")) == 1 {
         serverAddress = serverAddress + ":19132"
     }
+
     cacheTokenBytes, err := os.ReadFile(".token_cache")
     if err == nil {
         var cacheTok *oauth2.Token
@@ -54,7 +50,7 @@ func Run(serverAddress string) {
 }
 
 func handleConn(serverAddress string, src oauth2.TokenSource) {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute) // 5분 타임아웃 설정
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
     defer cancel()
 
     sigs := make(chan os.Signal, 1)
@@ -62,32 +58,34 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     var serverConn *minecraft.Conn
     var err error
-
-    for attempt := 0; attempt < maxRetries; attempt++ {
-        serverConn, err = minecraft.Dialer{
-            TokenSource: src,
-            // 프로토콜 버전을 지원하지 않으므로 주석 처리
-            // ProtocolVersion: protocolVersion,
-        }.DialContext(ctx, "raknet", serverAddress)
-        if err == nil {
-            break
+    go func() {
+        <-sigs
+        if serverConn != nil {
+            _ = serverConn.Close()
+            serverConn = nil
         }
-        fmt.Printf("Attempt %d/%d failed: %v\n", attempt+1, maxRetries, err)
-        time.Sleep(2 * time.Second) // 재시도 전 잠시 대기
-    }
+        cancel()
+        os.Exit(0)
+    }()
 
+    fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
+
+    // 서버와의 연결을 시도합니다. 프로토콜 버전은 자동으로 처리됩니다.
+    serverConn, err = minecraft.Dialer{
+        TokenSource: src,
+    }.DialContext(ctx, "raknet", serverAddress)
     if err != nil {
-        panic(fmt.Sprintf("Failed to connect after %d attempts: %v", maxRetries, err))
+        panic(fmt.Errorf("error connecting to server: %w", err))
     }
 
     fmt.Println("Getting resource pack information...")
     if err := serverConn.DoSpawnContext(ctx); err != nil {
-        panic(err)
+        panic(fmt.Errorf("error during DoSpawnContext: %w", err))
     }
 
     for i, rp := range serverConn.ResourcePacks() {
         if err := stealPack(i, serverAddress, rp); err != nil {
-            panic(err)
+            panic(fmt.Errorf("error stealing pack %d: %w", i, err))
         }
     }
 
@@ -109,7 +107,7 @@ func stealPack(i int, serverAddress string, rp *resource.Pack) error {
     }
 
     rpName := rp.Name()
-    disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} // Windows disallowed characters
+    disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"}
     for _, char := range disallowedChars {
         rpName = strings.ReplaceAll(rpName, char, "")
     }
