@@ -70,13 +70,11 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
 
-    // Use default values or configuration for the Dialer
-    dialer := minecraft.Dialer{
+    // Dial the server
+    serverConn, err = minecraft.Dialer{
         TokenSource: src,
-        // Optionally set other configurations here if needed
-    }
-
-    serverConn, err = dialer.DialContext(ctx, "raknet", serverAddress)
+        // ProtocolVersion is not explicitly set here
+    }.DialContext(ctx, "raknet", serverAddress)
     if err != nil {
         panic(fmt.Errorf("error connecting to server: %w", err))
     }
@@ -92,7 +90,6 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
         }
     }
 
-    // Ensure connection is closed properly
     err = serverConn.Close()
     if err != nil {
         fmt.Printf("Warning: error closing connection: %v\n", err)
