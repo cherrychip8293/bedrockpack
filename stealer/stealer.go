@@ -7,6 +7,7 @@ import (
 	"github.com/akmalfairuz/bedrockpack/pack"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/auth"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/resource"
 	"golang.org/x/oauth2"
 	"io"
@@ -37,11 +38,13 @@ func Run(serverAddress string) {
 
 	token, err := auth.RequestLiveToken()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to request live token: %v\n", err)
+		return
 	}
 	tokBytes, err := json.Marshal(token)
 	if err := os.WriteFile(".token_cache", tokBytes, 0777); err != nil {
-		panic(err)
+		fmt.Printf("Failed to write token cache: %v\n", err)
+		return
 	}
 
 	src := auth.RefreshTokenSource(token)
@@ -64,26 +67,32 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
+	fmt.Printf("Connecting to %s... (may take up to 5 minutes)\n", serverAddress)
 	serverConn, err = minecraft.Dialer{
-		TokenSource: src,
+		TokenSource:     src,
+		ProtocolVersion: protocol.CurrentVersion, // 최신 프로토콜 버전을 사용합니다.
+		Timeout:         5 * time.Minute,         // 타임아웃 설정
 	}.DialContext(ctx, "raknet", serverAddress)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to connect: %v\n", err)
+		return
 	}
 
 	fmt.Println("Getting resource pack information...")
 	if err := serverConn.DoSpawnContext(ctx); err != nil {
-		panic(err)
+		fmt.Printf("Failed to get resource pack info: %v\n", err)
+		return
 	}
 
 	for i, rp := range serverConn.ResourcePacks() {
 		if err := stealPack(i, serverAddress, rp); err != nil {
-			panic(err)
+			fmt.Printf("Failed to steal resource pack: %v\n", err)
+			return
 		}
 	}
 
 	_ = serverConn.Close()
+	fmt.Println("All resource packs have been successfully stolen.")
 }
 
 func stealPack(i int, serverAddress string, rp *resource.Pack) error {
@@ -95,13 +104,13 @@ func stealPack(i int, serverAddress string, rp *resource.Pack) error {
 	if err != nil {
 		return fmt.Errorf("error loading resource pack: %w", err)
 	}
-	fmt.Printf("Decrypting resource pack %s with key %s ...\n", rp.Name(), rp.ContentKey())
+	fmt.Printf("Decrypting resource pack %s with key %s...\n", rp.Name(), rp.ContentKey())
 	if err := pac.Decrypt([]byte(rp.ContentKey())); err != nil {
 		return fmt.Errorf("error when decrypting resource pack: %w", err)
 	}
 
 	rpName := rp.Name()
-	disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} // Windows disallowed characters
+	disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} // Windows에서 허용되지 않는 문자 제거
 	for _, char := range disallowedChars {
 		rpName = strings.ReplaceAll(rpName, char, "")
 	}
