@@ -70,9 +70,13 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
 
-    serverConn, err = minecraft.Dialer{
+    // Use default values or configuration for the Dialer
+    dialer := minecraft.Dialer{
         TokenSource: src,
-    }.DialContext(ctx, "raknet", serverAddress)
+        // Optionally set other configurations here if needed
+    }
+
+    serverConn, err = dialer.DialContext(ctx, "raknet", serverAddress)
     if err != nil {
         panic(fmt.Errorf("error connecting to server: %w", err))
     }
