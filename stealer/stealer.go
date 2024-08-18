@@ -69,7 +69,7 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
 	fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
 
-	// ProtocolVersion 및 Timeout 필드를 제거
+	// ProtocolVersion 및 Timeout 필드를 제거합니다.
 	serverConn, err = minecraft.Dialer{
 		TokenSource: src,
 	}.DialContext(ctx, "raknet", serverAddress)
