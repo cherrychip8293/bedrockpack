@@ -7,7 +7,6 @@ import (
 	"github.com/akmalfairuz/bedrockpack/pack"
 	"github.com/sandertv/gophertunnel/minecraft"
 	"github.com/sandertv/gophertunnel/minecraft/auth"
-	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/resource"
 	"golang.org/x/oauth2"
 	"io"
@@ -38,13 +37,11 @@ func Run(serverAddress string) {
 
 	token, err := auth.RequestLiveToken()
 	if err != nil {
-		fmt.Printf("Failed to request live token: %v\n", err)
-		return
+		panic(err)
 	}
 	tokBytes, err := json.Marshal(token)
 	if err := os.WriteFile(".token_cache", tokBytes, 0777); err != nil {
-		fmt.Printf("Failed to write token cache: %v\n", err)
-		return
+		panic(err)
 	}
 
 	src := auth.RefreshTokenSource(token)
@@ -94,7 +91,6 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 	_ = serverConn.Close()
 }
 
-
 func stealPack(i int, serverAddress string, rp *resource.Pack) error {
 	packBytes, err := downloadPack(rp)
 	if err != nil {
@@ -104,13 +100,13 @@ func stealPack(i int, serverAddress string, rp *resource.Pack) error {
 	if err != nil {
 		return fmt.Errorf("error loading resource pack: %w", err)
 	}
-	fmt.Printf("Decrypting resource pack %s with key %s...\n", rp.Name(), rp.ContentKey())
+	fmt.Printf("Decrypting resource pack %s with key %s ...\n", rp.Name(), rp.ContentKey())
 	if err := pac.Decrypt([]byte(rp.ContentKey())); err != nil {
 		return fmt.Errorf("error when decrypting resource pack: %w", err)
 	}
 
 	rpName := rp.Name()
-	disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} // Windows에서 허용되지 않는 문자 제거
+	disallowedChars := []string{"\\", "/", ":", "*", "?", "\"", "<", ">", "|"} // Windows disallowed characters
 	for _, char := range disallowedChars {
 		rpName = strings.ReplaceAll(rpName, char, "")
 	}
