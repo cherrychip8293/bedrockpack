@@ -73,10 +73,9 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
 
-    // 프로토콜 버전을 설정합니다.
+    // ProtocolVersion 필드를 제거하고 DialContext를 사용합니다.
     serverConn, err = minecraft.Dialer{
-        TokenSource:    src,
-        ProtocolVersion: protocolVersion, // 여기에 프로토콜 버전을 설정합니다.
+        TokenSource: src,
     }.DialContext(ctx, "raknet", serverAddress)
     if err != nil {
         panic(err)
