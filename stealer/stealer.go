@@ -20,6 +20,7 @@ import (
 
 const (
     protocolVersion = 950 // 프로토콜 버전 1.21.21에 맞는 버전
+    maxRetries      = 3   // 최대 재시도 횟수
 )
 
 func Run(serverAddress string) {
@@ -61,24 +62,22 @@ func handleConn(serverAddress string, src oauth2.TokenSource) {
 
     var serverConn *minecraft.Conn
     var err error
-    go func() {
-        <-sigs
-        if serverConn != nil {
-            _ = serverConn.Close()
-            serverConn = nil
+
+    for attempt := 0; attempt < maxRetries; attempt++ {
+        serverConn, err = minecraft.Dialer{
+            TokenSource: src,
+            // 프로토콜 버전을 지원하지 않으므로 주석 처리
+            // ProtocolVersion: protocolVersion,
+        }.DialContext(ctx, "raknet", serverAddress)
+        if err == nil {
+            break
         }
-        cancel()
-        os.Exit(0)
-    }()
+        fmt.Printf("Attempt %d/%d failed: %v\n", attempt+1, maxRetries, err)
+        time.Sleep(2 * time.Second) // 재시도 전 잠시 대기
+    }
 
-    fmt.Printf("Connecting to %s... (may take up to 5 minutes) \n", serverAddress)
-
-    // ProtocolVersion 필드를 제거하고 DialContext를 사용합니다.
-    serverConn, err = minecraft.Dialer{
-        TokenSource: src,
-    }.DialContext(ctx, "raknet", serverAddress)
     if err != nil {
-        panic(err)
+        panic(fmt.Sprintf("Failed to connect after %d attempts: %v", maxRetries, err))
     }
 
     fmt.Println("Getting resource pack information...")
